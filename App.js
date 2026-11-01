@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, View, Image, Alert } from 'react-native';
+import { StyleSheet, View, Image, Platform } from 'react-native';
+import { showAlert } from './src/utils/alert';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -39,7 +40,7 @@ function TabNavigator() {
   const handleProtectedTab = (e, navigation) => {
     if (!isLoggedIn) {
       e.preventDefault(); // STOPS the tab from actually switching
-      Alert.alert(
+      showAlert(
         "Authentication Required", 
         "You must be signed in to view this section."
       );
@@ -129,9 +130,14 @@ function RootNavigator() {
 export default function App() {
   return (
     <Provider store={store}>
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>
+      {/* On web, show the app in a phone-sized column so it looks like the mobile app */}
+      <View style={styles.webOuter}>
+        <View style={styles.webPhone}>
+          <NavigationContainer>
+            <RootNavigator />
+          </NavigationContainer>
+        </View>
+      </View>
     </Provider>
   );
 }
@@ -140,5 +146,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  webOuter: {
+    flex: 1,
+    backgroundColor: Platform.OS === 'web' ? '#222' : 'transparent',
+    alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+  },
+  webPhone: {
+    flex: 1,
+    width: '100%',
+    maxWidth: Platform.OS === 'web' ? 430 : undefined,
+    overflow: 'hidden',
   },
 });

@@ -1,49 +1,24 @@
-import React, { useEffect } from 'react'; // <-- ADDED useEffect
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Image, ImageBackground, Alert } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, Image } from 'react-native';
+import ImageBackground from '../components/ImageBackground';
+import { showAlert } from '../utils/alert';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons'; 
-import { incrementQuantity, decrementQuantity, removeFromCart, clearCart } from '../redux/cartSlice';
+import { incrementQuantity, decrementQuantity, removeFromCart, setCartItems } from '../redux/cartSlice';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+import { createOrder, imageUri } from '../api/demoApi';
 
 const ShoppingCartScreen = ({ navigation }) => {
     const cartItems = useSelector((state) => state.cart.items);
-    const isHydrated = useSelector((state) => state.cart.isHydrated);
     const token = useSelector((state) => state.auth.token); 
     const dispatch = useDispatch();
 
     const totalPrice = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
     const totalQuantity = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
-    // NEW: Background Cart Synchronization!
-    // Whenever `cartItems` change, silently upload the new list to the database
-    useEffect(() => {
-        const syncCartWithServer = async () => {
-            if (token && isHydrated) {
-                // Format items exactly how the API demands
-                const formattedItems = cartItems.map(item => ({
-                    id: item.id,
-                    price: item.price,
-                    count: item.quantity
-                }));
-
-                try {
-                    await fetch(`${API_BASE_URL}/cart`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                        body: JSON.stringify({ items: formattedItems })
-                    });
-                } catch (error) {
-                    console.error("Cart Auto-Sync Error:", error);
-                }
-            }
-        };
-        syncCartWithServer();
-    }, [cartItems, token, isHydrated]); // The engine triggers ANY time the cart changes!
-
     const handleDecrement = (item) => {
         if (item.quantity === 1) {
-            Alert.alert(
+            showAlert(
                 "Remove Item",
                 "Are you sure you want to delete this item from the cart?",
                 [
@@ -57,39 +32,19 @@ const ShoppingCartScreen = ({ navigation }) => {
     };
 
     const handleCheckout = async () => {
-        try {
-            const formattedItems = cartItems.map(item => ({
-                prodID: item.id,
-                price: item.price,
-                quantity: item.quantity
-            }));
-
-            const response = await fetch(`${API_BASE_URL}/orders/neworder`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ items: formattedItems }),
-            });
-
-            const data = await response.json();
-
-            if (data.status === "error") {
-                Alert.alert("Checkout Failed", data.message || "Could not process order.");
-                return;
-            }
-
-            Alert.alert("Success!", "Your order has been placed.");
-            dispatch(clearCart()); 
-            navigation.navigate("My Orders"); 
-
-        } catch (error) {
-            console.error("Checkout Error:", error);
-            Alert.alert("Server Error", "Could not connect to the backend server to checkout.");
+        const data = await createOrder(token, cartItems);
+        if (data.status === "error") {
+            showAlert("Checkout Failed", data.message || "Could not process order.");
+            return;
         }
+        showAlert("Success!", "Your order has been placed.");
+        dispatch(setCartItems([]));
+        navigation.navigate("My Orders");
     };
 
     const renderCartItem = ({ item }) => (
         <View style={styles.cartItem}>
-            <Image source={{ uri: `${API_BASE_URL}${item.image}` }} style={styles.itemImage} />
+            <Image source={{ uri: imageUri(item.image) }} style={styles.itemImage} />
             <View style={styles.itemDetails}>
                 <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
                 <Text style={styles.itemPrice}>Price: ${item.price.toFixed(2)}</Text>

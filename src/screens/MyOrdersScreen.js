@@ -1,10 +1,12 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, ImageBackground, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import ImageBackground from '../components/ImageBackground';
+import { showAlert } from '../utils/alert';
 import { useSelector, useDispatch } from 'react-redux';
 import { useFocusEffect } from '@react-navigation/native';
 import { setNewOrderCount } from '../redux/orderSlice';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+import { getOrders, getProduct, updateOrder, imageUri } from '../api/demoApi';
 
 const OrderCard = ({ order, onUpdateStatus, token }) => {
     const [expanded, setExpanded] = useState(false);
@@ -20,21 +22,23 @@ const OrderCard = ({ order, onUpdateStatus, token }) => {
 
     const handleExpand = async () => {
         setExpanded(!expanded);
-        // Only fetch the product details from the backend if we haven't already
+        // Only fetch the product details if we haven't already
         if (!expanded && detailedItems.length === 0) {
             setLoadingDetails(true);
             try {
                 const fetchedItems = await Promise.all(
                     parsedItems.map(async (item) => {
+                        if (item.title && item.image) return item;
                         const actualId = item.prodID || item.id || item.productId;
-                        const res = await fetch(`${API_BASE_URL}/products/${actualId}`);
-                        const data = await res.json();
-                        return { ...item, title: data.title, image: data.image };
+                        try {
+                            const data = await getProduct(actualId);
+                            return { ...item, title: data.title, image: data.image };
+                        } catch (e) {
+                            return item;
+                        }
                     })
                 );
                 setDetailedItems(fetchedItems);
-            } catch (error) {
-                console.error("Error fetching item details", error);
             } finally {
                 setLoadingDetails(false);
             }
@@ -61,7 +65,7 @@ const OrderCard = ({ order, onUpdateStatus, token }) => {
                             const actualId = item.prodID || item.id || item.productId;
                             return (
                                 <View key={index} style={styles.detailedItemRow}>
-                                    {item.image && <Image source={{ uri: `${API_BASE_URL}${item.image}` }} style={styles.orderItemImage} />}
+                                    {item.image && <Image source={{ uri: imageUri(item.image) }} style={styles.orderItemImage} />}
                                     <View style={styles.orderItemInfo}>
                                         <Text style={styles.orderItemTitle}>{item.title || `Product ID: ${actualId}`}</Text>
                                         <Text style={styles.itemDetailText}>Qty: {item.quantity} | ${item.price.toFixed(2)}</Text>
@@ -124,50 +128,23 @@ const MyOrdersScreen = () => {
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/orders/all`, {
-                method: 'GET',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await response.json();
-
-            if (data.status === 'OK') {
-                setOrders(data.orders);
-                
-                // Redux Badge Tracker (Requirement 8)
-                const newCount = data.orders.filter(o => o.is_paid === 0 && o.is_delivered === 0).length;
-                dispatch(setNewOrderCount(newCount));
-            } else {
-                Alert.alert("Error", data.message || "Failed to load orders.");
-            }
-        } catch (error) {
-            console.error("Fetch Orders Error:", error);
+            const data = await getOrders(token);
+            setOrders(data);
+            // Redux Badge Tracker (Requirement 8)
+            const newCount = data.filter(o => o.is_paid === 0 && o.is_delivered === 0).length;
+            dispatch(setNewOrderCount(newCount));
         } finally {
             setLoading(false);
         }
     };
 
     const handleUpdateOrderStatus = async (orderID, isPaid, isDelivered) => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/orders/updateorder`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
-                body: JSON.stringify({ orderID, isPaid, isDelivered })
-            });
-
-            const data = await response.json();
-
-            if (data.status === 'OK') {
-                Alert.alert("Success", "Order status updated successfully!");
-                fetchOrders(); 
-            } else {
-                Alert.alert("Update Failed", data.message || "Could not update order.");
-            }
-        } catch (error) {
-            console.error("Update Order Error:", error);
-            Alert.alert("Server Error", "Could not connect to the backend.");
+        const data = await updateOrder(token, { orderID, isPaid, isDelivered });
+        if (data.status === 'OK') {
+            showAlert("Success", "Order status updated successfully!");
+            fetchOrders();
+        } else {
+            showAlert("Update Failed", data.message || "Could not update order.");
         }
     };
 

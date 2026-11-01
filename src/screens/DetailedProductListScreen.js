@@ -1,10 +1,12 @@
 import React, {useState, useEffect} from 'react';
-import { StyleSheet, Text, View, ImageBackground, ActivityIndicator, Image, Alert, TouchableOpacity, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, ActivityIndicator, Image, TouchableOpacity, ScrollView } from 'react-native';
+import ImageBackground from '../components/ImageBackground';
+import { showAlert } from '../utils/alert';
 
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 import { addToCart } from '../redux/cartSlice';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+import { getProduct, imageUri } from '../api/demoApi';
 
 const DetailedProductListScreen = ({route, navigation}) => {
     const [detailedItems, setDetailedItems] = useState(null);
@@ -12,13 +14,10 @@ const DetailedProductListScreen = ({route, navigation}) => {
     const {productId} = route.params;
 
     const dispatch = useDispatch(); 
-    const token = useSelector((state) => state.auth.token);
-    const currentCart = useSelector((state) => state.cart.items);
 
     const fetchDetailedItems = async () => {
         try{
-            const response = await fetch(`${API_BASE_URL}/products/${productId}`);
-            const data = await response.json();
+            const data = await getProduct(productId);
             setDetailedItems(data);
             setLoading(false);
         } catch (error){
@@ -40,9 +39,11 @@ const DetailedProductListScreen = ({route, navigation}) => {
             <ImageBackground style={DetailedProductListScreenStyles.MainBG}> 
                 {loading ? (
                     <ActivityIndicator size="large" color="#000" style={{ marginTop: 50 }}/> 
+                ) : !detailedItems ? (
+                    <Text style={DetailedProductListScreenStyles.TitleText}>Could not load this product.</Text>
                 ) : (
                     <ScrollView contentContainerStyle={DetailedProductListScreenStyles.scrollContent} showsVerticalScrollIndicator={false}>
-                        <Image source={{ uri: `${API_BASE_URL}${detailedItems.image}` }} style={DetailedProductListScreenStyles.fullImage} />
+                        <Image source={{ uri: imageUri(detailedItems.image) }} style={DetailedProductListScreenStyles.fullImage} />
 
                         <Text style={DetailedProductListScreenStyles.TitleText}> Name: {detailedItems.title} </Text>
                         
@@ -58,38 +59,10 @@ const DetailedProductListScreen = ({route, navigation}) => {
 
                             <TouchableOpacity 
                                 style={[DetailedProductListScreenStyles.button, DetailedProductListScreenStyles.cartBtn]} 
-                                onPress={async () => {
-                                    // 1. Instantly save locally to Redux
+                                onPress={() => {
+                                    // Cart is saved to the browser automatically (see redux/store.js)
                                     dispatch(addToCart(detailedItems));
-                                    Alert.alert("Shopping Cart", "Added to Cart!");
-
-                                    // 2. Secretly send the change to the database! (Requirement 12)
-                                    if (token) {
-                                        // Calculate what the new cart looks like
-                                        const itemIndex = currentCart.findIndex(i => i.id === detailedItems.id);
-                                        let newCart = [...currentCart];
-                                        if (itemIndex >= 0) {
-                                            newCart[itemIndex] = { ...newCart[itemIndex], quantity: newCart[itemIndex].quantity + 1 };
-                                        } else {
-                                            newCart.push({ ...detailedItems, quantity: 1 });
-                                        }
-
-                                        const formattedItems = newCart.map(item => ({
-                                            id: item.id,
-                                            price: item.price,
-                                            count: item.quantity
-                                        }));
-
-                                        try {
-                                            await fetch(`${API_BASE_URL}/cart`, {
-                                                method: 'PUT',
-                                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                                                body: JSON.stringify({ items: formattedItems })
-                                            });
-                                        } catch (e) {
-                                            console.error("Cart Direct-Sync Error", e);
-                                        }
-                                    }
+                                    showAlert("Shopping Cart", "Added to Cart!");
                                 }}
                             >
                                 <Image source={require('../assets/Items/cart.png')} style={DetailedProductListScreenStyles.buttonIcon} />

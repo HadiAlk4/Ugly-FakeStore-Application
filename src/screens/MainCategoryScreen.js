@@ -1,9 +1,10 @@
 import React, {useState, useEffect} from 'react';
-import { StyleSheet, Text, View, ImageBackground, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import ImageBackground from '../components/ImageBackground';
 
 import { useFonts } from 'expo-font'
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+import { getCategories } from '../api/demoApi';
 
 const MainCategoryScreen = ({ navigation }) => {
 
@@ -15,8 +16,7 @@ const MainCategoryScreen = ({ navigation }) => {
 
     const FetchCategories = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/products/categories`);
-            const data = await response.json();
+            const data = await getCategories();
             setCategories(data);
             setLoading(false);
         } catch (error) {

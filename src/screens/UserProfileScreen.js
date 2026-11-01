@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform, ImageBackground, Image, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Image, Modal } from 'react-native';
+import ImageBackground from '../components/ImageBackground';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginSuccess, logout } from '../redux/authSlice';
 // NEW: Import our cart and order clear/set actions
 import { clearCart, setCartItems } from '../redux/cartSlice';
 import { clearOrderBadge } from '../redux/orderSlice';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL; 
+import { signIn, signUp, updateUser, getCart } from '../api/demoApi';
+import { showAlert } from '../utils/alert';
 
 const UserProfileScreen = () => {
     const dispatch = useDispatch();
@@ -27,92 +29,48 @@ const UserProfileScreen = () => {
 
     const handleSubmit = async () => {
         if (!email || !password || (!isSignIn && !name)) {
-            Alert.alert("Validation Error", "Please fill in all required fields.");
+            showAlert("Validation Error", "Please fill in all required fields.");
             return;
         }
 
-        const endpoint = isSignIn ? '/users/signin' : '/users/signup';
-        const payload = isSignIn ? { email, password } : { name, email, password };
+        const data = isSignIn
+            ? await signIn({ email, password })
+            : await signUp({ name, email, password });
 
-        try {
-            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            const data = await response.json();
-
-            if (data.status === "error") {
-                Alert.alert("Authentication Failed", data.message || "Invalid credentials.");
-                return;
-            }
-
-            // 1. Log the user in
-            dispatch(loginSuccess({ user: { name: data.name, email: data.email }, token: data.token }));
-            
-            // 2. REHYDRATE THE CART (Requirement 12)
-            try {
-                const cartRes = await fetch(`${API_BASE_URL}/cart`, {
-                    headers: { 'Authorization': `Bearer ${data.token}` }
-                });
-                const cartData = await cartRes.json();
-                
-                if (cartData.status === 'OK' && cartData.items && cartData.items.length > 0) {
-                    // The API only returns {id, price, count}. We need to fetch the images/titles!
-                    const restoredCart = await Promise.all(cartData.items.map(async (item) => {
-                        const prodRes = await fetch(`${API_BASE_URL}/products/${item.id}`);
-                        const prodData = await prodRes.json();
-                        return {
-                            ...prodData, // Gives us the image, title, rating, etc.
-                            quantity: item.count // Map API 'count' to our Redux 'quantity'
-                        };
-                    }));
-                    dispatch(setCartItems(restoredCart));
-                } else {
-                    dispatch(setCartItems([]));
-                }
-            } catch (err) {
-                console.error("Cart Sync Error:", err);
-                dispatch(setCartItems([]));
-            }
-
-            if (isSignIn) {
-                Alert.alert("Welcome Back!", `Successfully signed in as ${data.name}`);
-            } else {
-                Alert.alert("Success", "Account created successfully! Logging you in...");
-            }
-            handleClear();
-        } catch (error) {
-            console.error("Auth API Error:", error);
-            Alert.alert("Server Error", "Could not connect to the backend server.");
+        if (data.status === "error") {
+            showAlert("Authentication Failed", data.message || "Invalid credentials.");
+            return;
         }
+
+        // 1. Log the user in
+        dispatch(loginSuccess({ user: { name: data.name, email: data.email }, token: data.token }));
+
+        // 2. Restore this user's saved cart (Requirement 12)
+        dispatch(setCartItems(await getCart(data.token)));
+
+        if (isSignIn) {
+            showAlert("Welcome Back!", `Successfully signed in as ${data.name}`);
+        } else {
+            showAlert("Success", "Account created successfully! Logging you in...");
+        }
+        handleClear();
     };
 
     const handleUpdateProfile = async () => {
         if (!updateName || !updatePassword) {
-            Alert.alert("Validation Error", "Please provide a new name and password.");
+            showAlert("Validation Error", "Please provide a new name and password.");
             return;
         }
-        try {
-            const response = await fetch(`${API_BASE_URL}/users/update`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ name: updateName, password: updatePassword }),
-            });
-            const data = await response.json();
-
-            if (data.status === "error") {
-                Alert.alert("Update Failed", data.message || "Could not update profile.");
-                return;
-            }
-            dispatch(loginSuccess({ user: { name: data.name, email: user.email }, token: token }));
-            Alert.alert("Success", data.message || "Profile updated successfully!");
-            
-            setIsUpdateModalVisible(false);
-            setUpdateName(''); setUpdatePassword('');
-        } catch (error) {
-            Alert.alert("Server Error", "Could not connect to the backend server.");
+        const data = await updateUser(token, { name: updateName, password: updatePassword });
+        if (data.status === "error") {
+            showAlert("Update Failed", data.message || "Could not update profile.");
+            return;
         }
+        dispatch(loginSuccess({ user: { name: data.name, email: user.email }, token: token }));
+        showAlert("Success", data.message || "Profile updated successfully!");
+
+        setIsUpdateModalVisible(false);
+        setUpdateName(''); setUpdatePassword('');
     };
 
     const openUpdateModal = () => {
@@ -196,6 +154,7 @@ const UserProfileScreen = () => {
                 <View style={styles.formWrapper}>
                     <View style={styles.formContainer}>
                         <Text style={styles.headerText}>{isSignIn ? 'Sign in with your email and password' : 'Sign up a new user'}</Text>
+                        <Text style={styles.demoNote}>Demo mode: any email and password will work. Your data stays in this browser.</Text>
 
                         {!isSignIn && (
                             <View style={styles.inputGroup}>
@@ -377,6 +336,14 @@ const styles = StyleSheet.create({
         color: '#000',
         fontWeight: 'bold',
         fontSize: 15,
+    },
+    demoNote: {
+        fontSize: 12,
+        color: '#333',
+        textAlign: 'center',
+        marginTop: -10,
+        marginBottom: 15,
+        fontStyle: 'italic',
     },
     toggleText: {
         color: '#000',

@@ -1,7 +1,8 @@
 import React, {useState, useEffect} from 'react';
-import { StyleSheet, Text, View, ImageBackground, FlatList, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, Text, View, FlatList, ActivityIndicator, TouchableOpacity, Image } from 'react-native';
+import ImageBackground from '../components/ImageBackground';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+import { getProductsByCategory, imageUri } from '../api/demoApi';
 
 const ProductListScreen = ({ route, navigation }) => {
     const [productItems, setProductItems] = useState([]);
@@ -10,14 +11,7 @@ const ProductListScreen = ({ route, navigation }) => {
 
     const fetchproductItems = async () => {
     try {
-        const response = await fetch(`${API_BASE_URL}/products/category/${categoryName}`);
-        
-        // Always check if the response is okay before parsing JSON
-        if (!response.ok) {
-            throw new Error(`Server responded with status: ${response.status}`);
-        }
-
-        const data = await response.json();
+        const data = await getProductsByCategory(categoryName);
         setProductItems(data);
         setLoading(false);
     } catch (error) {
@@ -66,8 +60,7 @@ const ProductListScreen = ({ route, navigation }) => {
                                         resizeMode="cover"
                                         style={ProductListScreenStyles.productCard} 
                                     >
-                                        <Image source={{ uri: `${API_BASE_URL}${item.image}` }} style={ProductListScreenStyles.productImage} />
-                                        {/* <Image source={{ uri: `http://10.128.169.244:3000${item.image}` }} style={ProductListScreenStyles.productImage} /> */}
+                                        <Image source={{ uri: imageUri(item.image) }} style={ProductListScreenStyles.productImage} />
                                         <View style={{ flex: 1, justifyContent: 'center', paddingRight: 10 }}>
                                             <Text style={ProductListScreenStyles.itemTitle} >{item.title}</Text>
                                             <Text style={ProductListScreenStyles.itemPrice}>Price: ${item.price}</Text>

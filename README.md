@@ -1,5 +1,13 @@
 # FakeStore Project
 
+## Live web demo
+
+**https://hadialk4.github.io/Ugly-FakeStore-Application/**
+
+The web demo runs without the backend: products come from the public [fakestoreapi.com](https://fakestoreapi.com), and sign-in, cart and orders run in "demo mode", saved only in the visitor's browser (any email and password work). Every push to `main` redeploys it via `.github/workflows/deploy-web.yml`.
+
+To build it locally: `npx expo export --platform web` (output in `dist/`).
+
 Welcome to the FakeStore project! This is a complete full-stack mobile e-commerce application consisting of a React Native mobile application and an Express.js backend server.
 
 ## Project Structure
